@@ -120,7 +120,7 @@ def search_chunks(
     query: str,
     embeddings: np.ndarray,
     chunks: List[str],
-    top_k: int = 3
+    top_k: int = 8
 ) -> List[Tuple[str, float]]:
     """Return top_k (chunk, similarity) for the query."""
     embedder = load_embedder()
