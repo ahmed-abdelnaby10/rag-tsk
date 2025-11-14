@@ -35,7 +35,7 @@ def load_embedder():
 # =========================
 
 def load_file(uploaded_file) -> str:
-    """Read PDF/TXT/CSV into one big text string. Uses OCR as a fallback for scanned PDFs. LLL"""
+    """Read PDF/TXT/CSV into one big text string. Uses OCR as a fallback for scanned PDFs."""
     suffix = uploaded_file.name.split(".")[-1].lower()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix="." + suffix) as tmp:
@@ -200,7 +200,7 @@ def main():
     # ---------- Sidebar ----------
     st.sidebar.header("1️⃣ Upload Document")
     uploaded_file = st.sidebar.file_uploader(
-        "Choose a PDF / TXT / CSV",
+        "Choose a PDF / TXT / CSV / OCR",
         type=["pdf", "txt", "csv"],
     )
 
