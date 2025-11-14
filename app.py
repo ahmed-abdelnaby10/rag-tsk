@@ -143,25 +143,22 @@ def generate_answer(question: str, retrieved_chunks: List[Tuple[str, float]]) ->
     """Call OpenAI ChatCompletion with context from retrieved chunks."""
     context_text = "\n\n---\n\n".join([c for c, _ in retrieved_chunks]) or "No context available."
 
-    # 🔧 Relaxed system prompt:
     system_prompt = (
         "You are a helpful AI assistant.\n"
-        "You are given some context extracted from a document. "
-        "Follow these rules:\n"
-        "1. First, try to answer using the information in the context. "
-        "   Prefer information from the context over your own knowledge.\n"
-        "2. If the context is incomplete but related to the question, you may use your "
-        "   general knowledge to give a complete answer, as long as you do not contradict the context.\n"
-        "3. Only say that you are not sure if the question is unrelated to both the context "
-        "   and your general knowledge.\n"
-        "4. Never invent facts that clearly contradict the context.\n"
+        "You are given some context extracted from a document. Follow these rules:\n"
+        "1. First, try to answer using the information in the context. Prefer information "
+        "   from the context over your own knowledge when it is relevant.\n"
+        "2. If the context is weak or only partially related, you may use your general "
+        "   knowledge to give a complete answer, as long as you do not contradict the context.\n"
+        "3. Only say that you are not sure if the question is genuinely impossible to answer.\n"
+        "4. Do NOT answer with just 'I am not sure' if you can reasonably explain the concept.\n"
         "Keep the answer short, clear, and in the same language as the question."
     )
 
     user_prompt = f"Context:\n{context_text}\n\nQuestion:\n{question}\n\nAnswer:"
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",  # or gpt-4o / any deployed model
+        model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -170,6 +167,7 @@ def generate_answer(question: str, retrieved_chunks: List[Tuple[str, float]]) ->
     )
 
     return response.choices[0].message.content.strip()
+
 
 
 # =========================
