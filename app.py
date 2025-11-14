@@ -272,18 +272,25 @@ def main():
                         chunks=st.session_state.chunks,
                         top_k=8,   # more chunks for big books
                     )
+                    answer = generate_answer(question, results)
+                    # results = search_chunks(
+                    #     query=question,
+                    #     embeddings=st.session_state.embeddings,
+                    #     chunks=st.session_state.chunks,
+                    #     top_k=8,   # more chunks for big books
+                    # )
 
-                    # 🔒 HARD GATE: if similarity is too low, treat it as unrelated to the document
-                    max_score = max((score for _, score in results), default=0.0)
-                    SIM_THRESHOLD = 0.3  # much lower; ML questions will pass
+                    # # 🔒 HARD GATE: if similarity is too low, treat it as unrelated to the document
+                    # max_score = max((score for _, score in results), default=0.0)
+                    # SIM_THRESHOLD = 0.3  # much lower; ML questions will pass
 
-                    if max_score < SIM_THRESHOLD:
-                        answer = (
-                            "This question does not seem to be answered in the uploaded document, "
-                            "so I cannot answer it from this file."
-                        )
-                    else:
-                        answer = generate_answer(question, results)
+                    # if max_score < SIM_THRESHOLD:
+                    #     answer = (
+                    #         "This question does not seem to be answered in the uploaded document, "
+                    #         "so I cannot answer it from this file."
+                    #     )
+                    # else:
+                    #     answer = generate_answer(question, results)
 
                     st.session_state.history.append(
                         {
