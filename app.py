@@ -275,16 +275,14 @@ def main():
 
                     # 🔒 HARD GATE: if similarity is too low, treat it as unrelated to the document
                     max_score = max((score for _, score in results), default=0.0)
-                    SIM_THRESHOLD = 0.35  # tune if needed
+                    SIM_THRESHOLD = 0.15  # much lower; ML questions will pass, fried chicken won't
 
                     if max_score < SIM_THRESHOLD:
-                        # Question is probably outside the document
                         answer = (
                             "This question does not seem to be answered in the uploaded document, "
                             "so I cannot answer it from this file."
                         )
                     else:
-                        # Relevant → ask the LLM, but it must stick to context
                         answer = generate_answer(question, results)
 
                     st.session_state.history.append(
