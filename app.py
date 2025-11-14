@@ -120,7 +120,7 @@ def search_chunks(
     query: str,
     embeddings: np.ndarray,
     chunks: List[str],
-    top_k: int = 3
+    top_k: int = 8,
 ) -> List[Tuple[str, float]]:
     """Return top_k (chunk, similarity) for the query."""
     embedder = load_embedder()
@@ -143,22 +143,25 @@ def generate_answer(question: str, retrieved_chunks: List[Tuple[str, float]]) ->
     """Call OpenAI ChatCompletion with context from retrieved chunks."""
     context_text = "\n\n---\n\n".join([c for c, _ in retrieved_chunks]) or "No context available."
 
+    # STRICT: answer ONLY from context, but try to explain concepts if they appear there.
     system_prompt = (
-        "You are a helpful AI assistant.\n"
-        "You are given some context extracted from a document. Follow these rules:\n"
-        "1. First, try to answer using the information in the context. Prefer information "
-        "   from the context over your own knowledge when it is relevant.\n"
-        "2. If the context is weak or only partially related, you may use your general "
-        "   knowledge to give a complete answer, as long as you do not contradict the context.\n"
-        "3. Only say that you are not sure if the question is genuinely impossible to answer.\n"
-        "4. Do NOT answer with just 'I am not sure' if you can reasonably explain the concept.\n"
-        "Keep the answer short, clear, and in the same language as the question."
+        "You are a helpful assistant that answers questions using ONLY the provided context, "
+        "which comes from an uploaded document.\n\n"
+        "Rules:\n"
+        "1. Treat the context as your only source of knowledge.\n"
+        "2. If the context clearly discusses the topic of the question, summarize and explain "
+        "   the concept in your own words, even if the exact wording isn't present.\n"
+        "3. If the context does NOT contain any relevant information about the question, "
+        "   answer exactly:\n"
+        "   \"I am not sure, this does not appear in the uploaded document.\"\n"
+        "4. Do NOT use any outside knowledge beyond the context.\n"
+        "5. Keep the answer short, clear, and in the same language as the question."
     )
 
     user_prompt = f"Context:\n{context_text}\n\nQuestion:\n{question}\n\nAnswer:"
 
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model="gpt-4o-mini",  # or gpt-4o / any deployed model
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -167,7 +170,6 @@ def generate_answer(question: str, retrieved_chunks: List[Tuple[str, float]]) ->
     )
 
     return response.choices[0].message.content.strip()
-
 
 
 # =========================
@@ -264,14 +266,26 @@ def main():
 
             if st.button("Get Answer", type="primary") and question.strip():
                 with st.spinner("Thinking..."):
-                    # 🔧 retrieve more chunks (8 instead of 3)
                     results = search_chunks(
                         query=question,
                         embeddings=st.session_state.embeddings,
                         chunks=st.session_state.chunks,
-                        top_k=8,
+                        top_k=8,   # more chunks for big books
                     )
-                    answer = generate_answer(question, results)
+
+                    # 🔒 HARD GATE: if similarity is too low, treat it as unrelated to the document
+                    max_score = max((score for _, score in results), default=0.0)
+                    SIM_THRESHOLD = 0.35  # tune if needed
+
+                    if max_score < SIM_THRESHOLD:
+                        # Question is probably outside the document
+                        answer = (
+                            "This question does not seem to be answered in the uploaded document, "
+                            "so I cannot answer it from this file."
+                        )
+                    else:
+                        # Relevant → ask the LLM, but it must stick to context
+                        answer = generate_answer(question, results)
 
                     st.session_state.history.append(
                         {
