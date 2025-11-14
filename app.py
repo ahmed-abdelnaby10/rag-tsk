@@ -45,7 +45,7 @@ def load_file(uploaded_file) -> str:
     text = ""
     try:
         if suffix == "pdf":
-            # 1) جرّب استخراج نص عادي
+            # 1) Try regular text extraction
             reader = PdfReader(tmp_path)
             pages_text = []
             for page in reader.pages:
@@ -53,7 +53,7 @@ def load_file(uploaded_file) -> str:
                 pages_text.append(page_text)
             text = "\n\n".join(pages_text)
 
-            # 2) لو مفيش نص → جرّب OCR لكن جوّه try/except
+            # 2) If no text → try OCR
             if not text.strip():
                 try:
                     images = convert_from_path(tmp_path)
@@ -62,10 +62,9 @@ def load_file(uploaded_file) -> str:
                         page_txt = pytesseract.image_to_string(img, lang="eng+ara")
                         ocr_pages.append(page_txt)
                     text = "\n\n".join(ocr_pages)
-                except Exception as e:
-                    # فشل الـ OCR (مثلاً Poppler/Tesseract مش متسطّبين على Streamlit Cloud)
+                except Exception:
+                    # OCR failed (e.g. no Poppler/Tesseract on server)
                     text = ""
-                    # مش لازم نطبع e عشان ما نسرّبش حاجة، هنمسكه في main
 
         elif suffix in ("txt", "md"):
             with open(tmp_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -199,16 +198,18 @@ def main():
     chunk_size = st.sidebar.slider("Chunk size (words)", 200, 1000, 500, step=50)
     overlap = st.sidebar.slider("Chunk overlap (words)", 0, 400, 100, step=50)
 
-        # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
+    # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
     if uploaded_file is not None:
-        # لو ملف جديد (اسم مختلف) نعيد البناء من الأول
+        # If new file (different name) → rebuild everything
         if uploaded_file.name != st.session_state.file_name:
             with st.spinner("Reading & chunking file..."):
                 try:
                     text = load_file(uploaded_file)
-                except Exception as e:
-                    st.error("Error while reading the file. "
-                             "If this is a scanned PDF, OCR may not be supported on this server.")
+                except Exception:
+                    st.error(
+                        "Error while reading the file. "
+                        "If this is a scanned PDF, OCR may not be supported on this server."
+                    )
                     st.stop()
 
                 if not text or not text.strip():
@@ -231,7 +232,7 @@ def main():
                 st.session_state.file_name = uploaded_file.name
                 st.session_state.history = []  # reset history for new file
 
-        # نستخدم اللي في session_state حتى لو المستخدم غيّر الـ sliders
+        # Use what’s in session_state even if sliders change
         if st.session_state.chunks is not None:
             st.sidebar.success(f"Loaded file: {st.session_state.file_name}")
             st.sidebar.write(f"Chunks created: **{len(st.session_state.chunks)}**")
@@ -241,7 +242,6 @@ def main():
         st.session_state.embeddings = None
         st.session_state.history = []
 
-
     # ---------- Main layout ----------
     col_left, col_right = st.columns([2, 1])
 
@@ -250,7 +250,10 @@ def main():
         if st.session_state.chunks is None:
             st.info("Upload a document first to start asking questions.")
         else:
-            question = st.text_input("Your question:", placeholder="e.g., What is the main idea in this document?")
+            question = st.text_input(
+                "Your question:",
+                placeholder="e.g., What is the main idea in this document?",
+            )
 
             if st.button("Get Answer", type="primary") and question.strip():
                 with st.spinner("Thinking..."):
@@ -276,9 +279,9 @@ def main():
                 st.write(last["answer"])
 
                 st.markdown("### 📚 Retrieved Chunks")
-                for i, (chunk_text, score) in enumerate(last["sources"], start=1):
+                for i, (chunk_content, score) in enumerate(last["sources"], start=1):
                     with st.expander(f"Chunk {i} (similarity: {score:.3f})"):
-                        st.write(chunk_text)
+                        st.write(chunk_content)
 
     with col_right:
         st.subheader("3️⃣ Q&A History")
