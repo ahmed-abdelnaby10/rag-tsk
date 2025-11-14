@@ -8,6 +8,8 @@ import streamlit as st
 from openai import OpenAI
 from PyPDF2 import PdfReader
 from sentence_transformers import SentenceTransformer
+from pdf2image import convert_from_path
+import pytesseract
 
 
 # =========================
@@ -33,10 +35,8 @@ def load_embedder():
 # =========================
 
 def load_file(uploaded_file) -> str:
-    """Read PDF/TXT/CSV into one big text string."""
     suffix = uploaded_file.name.split(".")[-1].lower()
 
-    # Save to temp file because some libs need a file path
     with tempfile.NamedTemporaryFile(delete=False, suffix="." + suffix) as tmp:
         tmp.write(uploaded_file.read())
         tmp_path = tmp.name
@@ -44,6 +44,7 @@ def load_file(uploaded_file) -> str:
     text = ""
     try:
         if suffix == "pdf":
+            # أولاً: جرّب PyPDF2
             reader = PdfReader(tmp_path)
             pages_text = []
             for page in reader.pages:
@@ -51,26 +52,32 @@ def load_file(uploaded_file) -> str:
                 pages_text.append(page_text)
             text = "\n\n".join(pages_text)
 
+            # لو مفيش نص حقيقي -> جرّب OCR
+            if not text.strip():
+                images = convert_from_path(tmp_path)  # يحتاج poppler
+                ocr_pages = []
+                for img in images:
+                    # لو عندك عربي/إنجليزي:
+                    page_txt = pytesseract.image_to_string(img, lang="eng+ara")
+                    ocr_pages.append(page_txt)
+                text = "\n\n".join(ocr_pages)
+
         elif suffix in ("txt", "md"):
             with open(tmp_path, "r", encoding="utf-8", errors="ignore") as f:
                 text = f.read()
 
         elif suffix == "csv":
             df = pd.read_csv(tmp_path)
-            # Turn CSV into text (you can customize)
             text = df.to_csv(index=False)
-
         else:
             raise ValueError("Unsupported file type. Use PDF, TXT, or CSV.")
     finally:
-        # Clean temp file
         try:
             os.remove(tmp_path)
         except Exception:
             pass
 
     return text
-
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
     """
