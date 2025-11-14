@@ -275,7 +275,7 @@ def main():
 
                     # 🔒 HARD GATE: if similarity is too low, treat it as unrelated to the document
                     max_score = max((score for _, score in results), default=0.0)
-                    SIM_THRESHOLD = 0.15  # much lower; ML questions will pass, fried chicken won't
+                    SIM_THRESHOLD = 0.5  # much lower; ML questions will pass, fried chicken won't
 
                     if max_score < SIM_THRESHOLD:
                         answer = (
