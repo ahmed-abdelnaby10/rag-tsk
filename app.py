@@ -35,6 +35,7 @@ def load_embedder():
 # =========================
 
 def load_file(uploaded_file) -> str:
+    """Read PDF/TXT/CSV into one big text string. Uses OCR as a fallback for scanned PDFs."""
     suffix = uploaded_file.name.split(".")[-1].lower()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix="." + suffix) as tmp:
@@ -44,7 +45,7 @@ def load_file(uploaded_file) -> str:
     text = ""
     try:
         if suffix == "pdf":
-            # أولاً: جرّب PyPDF2
+            # 1) جرّب استخراج نص عادي
             reader = PdfReader(tmp_path)
             pages_text = []
             for page in reader.pages:
@@ -52,15 +53,19 @@ def load_file(uploaded_file) -> str:
                 pages_text.append(page_text)
             text = "\n\n".join(pages_text)
 
-            # لو مفيش نص حقيقي -> جرّب OCR
+            # 2) لو مفيش نص → جرّب OCR لكن جوّه try/except
             if not text.strip():
-                images = convert_from_path(tmp_path)  # يحتاج poppler
-                ocr_pages = []
-                for img in images:
-                    # لو عندك عربي/إنجليزي:
-                    page_txt = pytesseract.image_to_string(img, lang="eng+ara")
-                    ocr_pages.append(page_txt)
-                text = "\n\n".join(ocr_pages)
+                try:
+                    images = convert_from_path(tmp_path)
+                    ocr_pages = []
+                    for img in images:
+                        page_txt = pytesseract.image_to_string(img, lang="eng+ara")
+                        ocr_pages.append(page_txt)
+                    text = "\n\n".join(ocr_pages)
+                except Exception as e:
+                    # فشل الـ OCR (مثلاً Poppler/Tesseract مش متسطّبين على Streamlit Cloud)
+                    text = ""
+                    # مش لازم نطبع e عشان ما نسرّبش حاجة، هنمسكه في main
 
         elif suffix in ("txt", "md"):
             with open(tmp_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -69,6 +74,7 @@ def load_file(uploaded_file) -> str:
         elif suffix == "csv":
             df = pd.read_csv(tmp_path)
             text = df.to_csv(index=False)
+
         else:
             raise ValueError("Unsupported file type. Use PDF, TXT, or CSV.")
     finally:
@@ -78,6 +84,7 @@ def load_file(uploaded_file) -> str:
             pass
 
     return text
+
 
 def chunk_text(text: str, chunk_size: int = 500, overlap: int = 100) -> List[str]:
     """
@@ -192,16 +199,30 @@ def main():
     chunk_size = st.sidebar.slider("Chunk size (words)", 200, 1000, 500, step=50)
     overlap = st.sidebar.slider("Chunk overlap (words)", 0, 400, 100, step=50)
 
-    # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
+        # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
     if uploaded_file is not None:
         # لو ملف جديد (اسم مختلف) نعيد البناء من الأول
         if uploaded_file.name != st.session_state.file_name:
             with st.spinner("Reading & chunking file..."):
-                text = load_file(uploaded_file)
+                try:
+                    text = load_file(uploaded_file)
+                except Exception as e:
+                    st.error("Error while reading the file. "
+                             "If this is a scanned PDF, OCR may not be supported on this server.")
+                    st.stop()
+
+                if not text or not text.strip():
+                    st.error(
+                        "Could not extract any text from this file.\n\n"
+                        "Tip: Use a PDF with selectable text or upload a TXT/CSV file. "
+                        "Scanned PDFs may not be supported in this demo."
+                    )
+                    st.stop()
+
                 chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
 
                 if not chunks:
-                    st.error("Could not extract any text from this file.")
+                    st.error("No chunks could be created from this file.")
                     st.stop()
 
                 embeddings, chunks = build_vector_store(chunks)
@@ -219,6 +240,7 @@ def main():
         st.session_state.chunks = None
         st.session_state.embeddings = None
         st.session_state.history = []
+
 
     # ---------- Main layout ----------
     col_left, col_right = st.columns([2, 1])
