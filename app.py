@@ -143,10 +143,19 @@ def generate_answer(question: str, retrieved_chunks: List[Tuple[str, float]]) ->
     """Call OpenAI ChatCompletion with context from retrieved chunks."""
     context_text = "\n\n---\n\n".join([c for c, _ in retrieved_chunks]) or "No context available."
 
+    # 🔧 Relaxed system prompt:
     system_prompt = (
-        "You are a helpful assistant that answers questions ONLY using the given context. "
-        "If the answer is not in the context, say you are not sure. "
-        "You must keep the answer short, clear, and in the same language as the question."
+        "You are a helpful AI assistant.\n"
+        "You are given some context extracted from a document. "
+        "Follow these rules:\n"
+        "1. First, try to answer using the information in the context. "
+        "   Prefer information from the context over your own knowledge.\n"
+        "2. If the context is incomplete but related to the question, you may use your "
+        "   general knowledge to give a complete answer, as long as you do not contradict the context.\n"
+        "3. Only say that you are not sure if the question is unrelated to both the context "
+        "   and your general knowledge.\n"
+        "4. Never invent facts that clearly contradict the context.\n"
+        "Keep the answer short, clear, and in the same language as the question."
     )
 
     user_prompt = f"Context:\n{context_text}\n\nQuestion:\n{question}\n\nAnswer:"
@@ -198,7 +207,7 @@ def main():
     chunk_size = st.sidebar.slider("Chunk size (words)", 200, 1000, 500, step=50)
     overlap = st.sidebar.slider("Chunk overlap (words)", 0, 400, 100, step=50)
 
-    # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
+    # ✅ Work with the file only inside this block
     if uploaded_file is not None:
         # If new file (different name) → rebuild everything
         if uploaded_file.name != st.session_state.file_name:
@@ -257,11 +266,12 @@ def main():
 
             if st.button("Get Answer", type="primary") and question.strip():
                 with st.spinner("Thinking..."):
+                    # 🔧 retrieve more chunks (8 instead of 3)
                     results = search_chunks(
                         query=question,
                         embeddings=st.session_state.embeddings,
                         chunks=st.session_state.chunks,
-                        top_k=3,
+                        top_k=8,
                     )
                     answer = generate_answer(question, results)
 
