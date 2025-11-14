@@ -185,22 +185,33 @@ def main():
     chunk_size = st.sidebar.slider("Chunk size (words)", 200, 1000, 500, step=50)
     overlap = st.sidebar.slider("Chunk overlap (words)", 0, 400, 100, step=50)
 
-    if uploaded_file is not None and uploaded_file.name != st.session_state.file_name:
-        with st.spinner("Reading & chunking file..."):
-            text = load_file(uploaded_file)
-            chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
-            if not chunks:
-                st.error("Could not extract any text from this file.")
-                return
+    # ✅ IMPORTANT: كل الشغل على الملف جوّه الـ if دي
+    if uploaded_file is not None:
+        # لو ملف جديد (اسم مختلف) نعيد البناء من الأول
+        if uploaded_file.name != st.session_state.file_name:
+            with st.spinner("Reading & chunking file..."):
+                text = load_file(uploaded_file)
+                chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
 
-            embeddings, chunks = build_vector_store(chunks)
-            st.session_state.chunks = chunks
-            st.session_state.embeddings = embeddings
-            st.session_state.file_name = uploaded_file.name
-            st.session_state.history = []  # reset history for new file
+                if not chunks:
+                    st.error("Could not extract any text from this file.")
+                    st.stop()
 
-        st.sidebar.success(f"Loaded file: {uploaded_file.name}")
-        st.sidebar.write(f"Chunks created: **{len(chunks)}**")
+                embeddings, chunks = build_vector_store(chunks)
+                st.session_state.chunks = chunks
+                st.session_state.embeddings = embeddings
+                st.session_state.file_name = uploaded_file.name
+                st.session_state.history = []  # reset history for new file
+
+        # نستخدم اللي في session_state حتى لو المستخدم غيّر الـ sliders
+        if st.session_state.chunks is not None:
+            st.sidebar.success(f"Loaded file: {st.session_state.file_name}")
+            st.sidebar.write(f"Chunks created: **{len(st.session_state.chunks)}**")
+    else:
+        st.session_state.file_name = None
+        st.session_state.chunks = None
+        st.session_state.embeddings = None
+        st.session_state.history = []
 
     # ---------- Main layout ----------
     col_left, col_right = st.columns([2, 1])
@@ -214,18 +225,14 @@ def main():
 
             if st.button("Get Answer", type="primary") and question.strip():
                 with st.spinner("Thinking..."):
-                    # 1. Retrieve
                     results = search_chunks(
                         query=question,
                         embeddings=st.session_state.embeddings,
                         chunks=st.session_state.chunks,
                         top_k=3,
                     )
-
-                    # 2. Answer with LLM
                     answer = generate_answer(question, results)
 
-                    # 3. Save to history
                     st.session_state.history.append(
                         {
                             "question": question,
@@ -234,7 +241,6 @@ def main():
                         }
                     )
 
-            # Show latest answer
             if st.session_state.history:
                 last = st.session_state.history[-1]
                 st.markdown("### ✅ Answer")
