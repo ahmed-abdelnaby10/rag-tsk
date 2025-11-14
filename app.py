@@ -35,7 +35,7 @@ def load_embedder():
 # =========================
 
 def load_file(uploaded_file) -> str:
-    """Read PDF/TXT/CSV into one big text string. Uses OCR as a fallback for scanned PDFs."""
+    """Read PDF/TXT/CSV into one big text string. Uses OCR as a fallback for scanned PDFs. LLL"""
     suffix = uploaded_file.name.split(".")[-1].lower()
 
     with tempfile.NamedTemporaryFile(delete=False, suffix="." + suffix) as tmp:
